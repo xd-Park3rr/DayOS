@@ -1,9 +1,13 @@
 import { calendarService } from '../../calendar/calendarService';
 import type { AssistantCapability } from '../types';
 import {
+  combineDateAndTime,
+  getFirstStringParam,
+  getNumberParam,
   getObjectParam,
   getRangeFromParams,
   getStringParam,
+  parseDateLike,
 } from './common';
 
 const ensureCalendarAccess = async () => {
@@ -52,7 +56,7 @@ export const calendarCapability: AssistantCapability = {
     return null;
   },
 
-  execute: async (step) => {
+  execute: async (step, context) => {
     const access = await ensureCalendarAccess();
     if (access.blocked) {
       return {
@@ -137,12 +141,15 @@ export const calendarCapability: AssistantCapability = {
       }
 
       case 'create_event': {
-        const title = getStringParam(step.params, 'title');
-        const startAt = getStringParam(step.params, 'startAt');
-        const endAt = getStringParam(step.params, 'endAt');
-        if (!title || !startAt || !endAt) {
+        const title =
+          getFirstStringParam(step.params, ['title', 'eventTitle', 'name']) ||
+          'New event';
+        const startAt =
+          getResolvedStartAt(step.params, context.rawText);
+        const endAt = getResolvedEndAt(step.params, context.rawText, startAt);
+        if (!startAt || !endAt) {
           return {
-            reply: 'Calendar creation needs a title, start time, and end time.',
+            reply: 'Calendar creation needs a valid start time.',
             status: 'failed',
           };
         }
@@ -150,11 +157,12 @@ export const calendarCapability: AssistantCapability = {
         const created = await calendarService.createEvent({
           calendarId: getStringParam(step.params, 'calendarId'),
           title,
-          startAt,
-          endAt,
+          startAt: startAt.toISOString(),
+          endAt: endAt.toISOString(),
           notes: getStringParam(step.params, 'notes') || null,
           location: getStringParam(step.params, 'location') || null,
           allDay: step.params.allDay === true,
+          alarmMinutesBefore: getAlarmMinutesBefore(step.params, context.rawText),
         });
         return {
           reply: `${created.title} was created on your calendar.`,
@@ -199,6 +207,10 @@ export const calendarCapability: AssistantCapability = {
               getStringParam(patch, 'location') ||
               getStringParam(step.params, 'location') ||
               undefined,
+            alarmMinutesBefore: getAlarmMinutesBefore(
+              getObjectParam(step.params, 'patch') || step.params,
+              context.rawText
+            ),
           },
         });
 
@@ -312,3 +324,141 @@ export const calendarCapability: AssistantCapability = {
     };
   },
 };
+
+function getAlarmMinutesBefore(
+  params: Record<string, unknown>,
+  rawText?: string
+): number[] | undefined {
+  const directMinutes = [
+    getNumberParam(params, 'alarmMinutesBefore'),
+    getNumberParam(params, 'notificationMinutesBefore'),
+    getNumberParam(params, 'reminderMinutesBefore'),
+    getNumberParam(params, 'advanceNoticeMinutes'),
+  ].find((value): value is number => typeof value === 'number');
+
+  if (directMinutes !== undefined) {
+    return [directMinutes];
+  }
+
+  const directDays = [
+    getNumberParam(params, 'alarmDaysBefore'),
+    getNumberParam(params, 'notificationDaysBefore'),
+    getNumberParam(params, 'reminderDaysBefore'),
+    getNumberParam(params, 'advanceNoticeDays'),
+  ].find((value): value is number => typeof value === 'number');
+
+  if (directDays !== undefined) {
+    return [directDays * 24 * 60];
+  }
+
+  const directWeeks = [
+    getNumberParam(params, 'alarmWeeksBefore'),
+    getNumberParam(params, 'notificationWeeksBefore'),
+    getNumberParam(params, 'reminderWeeksBefore'),
+    getNumberParam(params, 'advanceNoticeWeeks'),
+  ].find((value): value is number => typeof value === 'number');
+
+  if (directWeeks !== undefined) {
+    return [directWeeks * 7 * 24 * 60];
+  }
+
+  if (!rawText) {
+    return undefined;
+  }
+
+  const weekMatch = rawText.match(/(\d+)\s*-\s*week|\b(\d+)\s*week(?:s)?\b/i);
+  const dayMatch = rawText.match(/\b(\d+)\s*day(?:s)?\b/i);
+  const hourMatch = rawText.match(/\b(\d+)\s*hour(?:s)?\b/i);
+
+  if (/notification|reminder|alert/i.test(rawText)) {
+    if (weekMatch) {
+      const value = Number(weekMatch[1] || weekMatch[2]);
+      if (Number.isFinite(value)) {
+        return [value * 7 * 24 * 60];
+      }
+    }
+
+    if (dayMatch) {
+      const value = Number(dayMatch[1]);
+      if (Number.isFinite(value)) {
+        return [value * 24 * 60];
+      }
+    }
+
+    if (hourMatch) {
+      const value = Number(hourMatch[1]);
+      if (Number.isFinite(value)) {
+        return [value * 60];
+      }
+    }
+  }
+
+  return undefined;
+}
+
+function getResolvedStartAt(
+  params: Record<string, unknown>,
+  rawText: string
+): Date | null {
+  const direct = getFirstStringParam(params, ['startAt', 'dateTime', 'dateTimePhrase']);
+  if (direct) {
+    const parsed = parseDateLike(direct);
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  const date = getFirstStringParam(params, ['date', 'startDate']);
+  const time = getFirstStringParam(params, ['time', 'startTime']);
+  if (date || time) {
+    const combined = combineDateAndTime(date || 'today', time || '9:00');
+    if (combined) {
+      return combined;
+    }
+  }
+
+  const explicitMatch = rawText.match(/\bon\s+(.+?)\s+at\s+([0-9]{1,2}(?::[0-9]{2})?\s*(?:am|pm)?)/i);
+  if (explicitMatch) {
+    return combineDateAndTime(explicitMatch[1], explicitMatch[2]);
+  }
+
+  return null;
+}
+
+function getResolvedEndAt(
+  params: Record<string, unknown>,
+  rawText: string,
+  startAt: Date | null
+): Date | null {
+  const direct = getFirstStringParam(params, ['endAt', 'endDateTime']);
+  if (direct) {
+    const parsed = parseDateLike(direct);
+    if (parsed && (!startAt || parsed.getTime() > startAt.getTime())) {
+      return parsed;
+    }
+  }
+
+  const date = getFirstStringParam(params, ['date', 'endDate']);
+  const endTime = getFirstStringParam(params, ['endTime']);
+  if (date && endTime) {
+    const combined = combineDateAndTime(date, endTime);
+    if (combined && (!startAt || combined.getTime() > startAt.getTime())) {
+      return combined;
+    }
+  }
+
+  const explicitMatch = rawText.match(/\buntil\s+([0-9]{1,2}(?::[0-9]{2})?\s*(?:am|pm)?)/i);
+  if (explicitMatch && startAt) {
+    const combined = combineDateAndTime(startAt, explicitMatch[1]);
+    if (combined && combined.getTime() > startAt.getTime()) {
+      return combined;
+    }
+  }
+
+  if (startAt) {
+    const durationMinutes = getNumberParam(params, 'durationMinutes') || 60;
+    return new Date(startAt.getTime() + durationMinutes * 60_000);
+  }
+
+  return null;
+}

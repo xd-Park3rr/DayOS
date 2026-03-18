@@ -1,4 +1,3 @@
-import { NativeModules } from 'react-native';
 import type { TranscribeOptions, WhisperContext, WhisperVadContext } from 'whisper.rn';
 import { microphonePermission } from './microphonePermission';
 
@@ -87,11 +86,6 @@ const pickModule = <T>(moduleValue: unknown, key?: string): T | null => {
 };
 
 const loadWhisper = async (): Promise<WhisperModule | null> => {
-  if (!NativeModules.RNWhisper) {
-    console.warn('[STT] RNWhisper native module is not ready yet.');
-    return null;
-  }
-
   try {
     const commonJsModule = require('whisper.rn/lib/commonjs/index');
     const initWhisper = pickModule<WhisperModule['initWhisper']>(commonJsModule, 'initWhisper');
@@ -108,10 +102,11 @@ const loadWhisper = async (): Promise<WhisperModule | null> => {
         return { initWhisper, initWhisperVad };
       }
     } catch (packageError) {
-      console.warn('[STT] whisper.rn is unavailable in this runtime.', packageError ?? commonJsError);
+      console.warn('[STT] Failed to load whisper.rn JS entrypoint.', packageError ?? commonJsError);
     }
   }
 
+  console.warn('[STT] RNWhisper JS entrypoint loaded, but initWhisper was unavailable.');
   return null;
 };
 

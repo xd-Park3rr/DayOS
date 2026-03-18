@@ -1,6 +1,27 @@
-import * as Notifications from 'expo-notifications';
+import Constants, { AppOwnership } from 'expo-constants';
 
 let isInitialized = false;
+let notificationsModulePromise: Promise<typeof import('expo-notifications') | null> | null = null;
+
+type NotificationRequest = import('expo-notifications').NotificationRequest;
+
+const isExpoGo = (): boolean =>
+  Constants.appOwnership === AppOwnership.Expo || Constants.expoGoConfig != null;
+
+const getNotificationsModule = async (): Promise<typeof import('expo-notifications') | null> => {
+  if (isExpoGo()) {
+    return null;
+  }
+
+  if (!notificationsModulePromise) {
+    notificationsModulePromise = import('expo-notifications').catch((error) => {
+      console.warn('[Notifications] Failed to load expo-notifications', error);
+      return null;
+    });
+  }
+
+  return notificationsModulePromise;
+};
 
 export const taskNotificationService = {
   initialize: async (): Promise<void> => {
@@ -8,21 +29,31 @@ export const taskNotificationService = {
       return;
     }
 
-    Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldPlaySound: true,
-        shouldSetBadge: false,
-        shouldShowBanner: true,
-        shouldShowList: true,
-      }),
-    });
+    const Notifications = await getNotificationsModule();
+    if (!Notifications) {
+      return;
+    }
 
-    await Notifications.setNotificationChannelAsync('tasks', {
-      name: 'Tasks',
-      importance: Notifications.AndroidImportance.DEFAULT,
-      vibrationPattern: [0, 200, 100, 200],
-      lightColor: '#c8f27a',
-    });
+    try {
+      Notifications.setNotificationHandler({
+        handleNotification: async () => ({
+          shouldPlaySound: true,
+          shouldSetBadge: false,
+          shouldShowBanner: true,
+          shouldShowList: true,
+        }),
+      });
+
+      await Notifications.setNotificationChannelAsync('tasks', {
+        name: 'Tasks',
+        importance: Notifications.AndroidImportance.DEFAULT,
+        vibrationPattern: [0, 200, 100, 200],
+        lightColor: '#c8f27a',
+      });
+    } catch (error) {
+      console.warn('[Notifications] Initialization skipped', error);
+      return;
+    }
 
     isInitialized = true;
   },
@@ -32,16 +63,34 @@ export const taskNotificationService = {
     canAskAgain: boolean;
     status: string;
   }> => {
-    let permission = await Notifications.getPermissionsAsync();
-    if (!permission.granted && requestIfNeeded) {
-      permission = await Notifications.requestPermissionsAsync();
+    const Notifications = await getNotificationsModule();
+    if (!Notifications) {
+      return {
+        granted: false,
+        canAskAgain: false,
+        status: isExpoGo() ? 'unsupported_in_expo_go' : 'unavailable',
+      };
     }
 
-    return {
-      granted: permission.granted,
-      canAskAgain: permission.canAskAgain,
-      status: permission.status,
-    };
+    try {
+      let permission = await Notifications.getPermissionsAsync();
+      if (!permission.granted && requestIfNeeded) {
+        permission = await Notifications.requestPermissionsAsync();
+      }
+
+      return {
+        granted: permission.granted,
+        canAskAgain: permission.canAskAgain,
+        status: permission.status,
+      };
+    } catch (error) {
+      console.warn('[Notifications] Permission check failed', error);
+      return {
+        granted: false,
+        canAskAgain: false,
+        status: 'unavailable',
+      };
+    }
   },
 
   scheduleTaskReminder: async (params: {
@@ -49,6 +98,15 @@ export const taskNotificationService = {
     body: string;
     dueAt: string;
   }): Promise<string> => {
+    const Notifications = await getNotificationsModule();
+    if (!Notifications) {
+      throw new Error(
+        isExpoGo()
+          ? 'Task reminders require an Android development build. Expo Go is not supported for notifications.'
+          : 'Notifications are unavailable on this build.'
+      );
+    }
+
     await taskNotificationService.initialize();
     const dueAt = new Date(params.dueAt);
     return Notifications.scheduleNotificationAsync({
@@ -69,10 +127,20 @@ export const taskNotificationService = {
       return;
     }
 
+    const Notifications = await getNotificationsModule();
+    if (!Notifications) {
+      return;
+    }
+
     await Notifications.cancelScheduledNotificationAsync(scheduledNotificationId);
   },
 
-  listScheduledNotifications: async (): Promise<Notifications.NotificationRequest[]> => {
+  listScheduledNotifications: async (): Promise<NotificationRequest[]> => {
+    const Notifications = await getNotificationsModule();
+    if (!Notifications) {
+      return [];
+    }
+
     return Notifications.getAllScheduledNotificationsAsync();
   },
 };

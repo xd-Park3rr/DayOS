@@ -16,11 +16,13 @@ import {
 import type {
   AssistantAutonomyMode,
   AssistantRunWithSteps,
+  RuntimeCapabilitySnapshot,
 } from '../../types';
 import {
   permissionService,
   type PermissionSnapshot,
 } from '../../services/assistant/permissionService';
+import { runtimeDiagnosticsService } from '../../services/runtime/runtimeDiagnosticsService';
 
 const permissionTargets: Record<keyof PermissionSnapshot, string> = {
   calendar: 'calendar',
@@ -35,11 +37,13 @@ export function SettingsScreen() {
   const [autonomyMode, setAutonomyMode] = useState<AssistantAutonomyMode>('safe_auto');
   const [runs, setRuns] = useState<AssistantRunWithSteps[]>([]);
   const [permissions, setPermissions] = useState<PermissionSnapshot | null>(null);
+  const [runtimeSnapshot, setRuntimeSnapshot] = useState<RuntimeCapabilitySnapshot | null>(null);
 
   const load = async () => {
     setAutonomyMode(assistantSettingRepo.getAutonomyMode());
     setRuns(assistantRunRepo.getRecent(8));
     setPermissions(await permissionService.getSnapshot());
+    setRuntimeSnapshot(runtimeDiagnosticsService.getSnapshot());
   };
 
   useEffect(() => {
@@ -86,6 +90,35 @@ export function SettingsScreen() {
               trackColor={{ false: '#333', true: COLORS.accent }}
             />
           </View>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Runtime diagnostics</Text>
+          <Text style={styles.cardBody}>
+            DayOS native features only work in the supported Android shell.
+          </Text>
+          {runtimeSnapshot ? (
+            <>
+              <Text style={styles.runtimeLabel}>
+                Shell: {runtimeDiagnosticsService.getShellLabel(runtimeSnapshot.shellType)}
+              </Text>
+              <Text style={styles.runtimeMeta}>
+                Supported: {runtimeSnapshot.isSupported ? 'Yes' : 'No'}
+              </Text>
+              {runtimeSnapshot.unsupportedReason ? (
+                <Text style={styles.runtimeWarning}>{runtimeSnapshot.unsupportedReason}</Text>
+              ) : null}
+              <Text style={styles.runtimeMeta}>
+                Missing modules:{' '}
+                {runtimeSnapshot.missingModules.length > 0
+                  ? runtimeSnapshot.missingModules.join(', ')
+                  : 'none'}
+              </Text>
+              <Text style={styles.runtimeFingerprint}>
+                {runtimeSnapshot.debugFingerprint}
+              </Text>
+            </>
+          ) : null}
         </View>
 
         <View style={styles.card}>
@@ -140,6 +173,19 @@ export function SettingsScreen() {
               <Text style={styles.runMeta}>
                 {new Date(run.createdAt).toLocaleString()} | {run.source}
               </Text>
+              {run.plannerErrorMessage ? (
+                <View style={styles.plannerErrorCard}>
+                  <Text style={styles.plannerErrorTitle}>
+                    {run.plannerErrorKind || 'planner_error'}
+                  </Text>
+                  <Text style={styles.stepError}>{run.plannerErrorMessage}</Text>
+                  {run.plannerNormalizedResponse ? (
+                    <Text style={styles.stepEvidence}>
+                      {run.plannerNormalizedResponse.slice(0, 220)}
+                    </Text>
+                  ) : null}
+                </View>
+              ) : null}
               {run.steps.slice(0, 4).map((step) => (
                 <View key={step.id} style={styles.stepRow}>
                   <Text style={styles.stepTitle}>
@@ -228,6 +274,31 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
   },
+  runtimeLabel: {
+    color: COLORS.textPrimary,
+    fontFamily: 'DMSans_700Bold',
+    fontSize: 13,
+  },
+  runtimeMeta: {
+    color: COLORS.textMuted,
+    fontFamily: 'DMSans',
+    fontSize: 12,
+    marginTop: 6,
+  },
+  runtimeWarning: {
+    color: COLORS.red,
+    fontFamily: 'DMSans',
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 8,
+  },
+  runtimeFingerprint: {
+    color: COLORS.textHint,
+    fontFamily: 'DMSans',
+    fontSize: 10,
+    lineHeight: 16,
+    marginTop: 10,
+  },
   permissionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -280,6 +351,18 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.04)',
+  },
+  plannerErrorCard: {
+    backgroundColor: '#1d1f24',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+  },
+  plannerErrorTitle: {
+    color: COLORS.red,
+    fontFamily: 'DMSans_700Bold',
+    fontSize: 11,
+    textTransform: 'uppercase',
   },
   runHeader: {
     flexDirection: 'row',

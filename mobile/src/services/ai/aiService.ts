@@ -1,13 +1,26 @@
 import { COACH_SYSTEM } from '../../constants';
 import type { ChatContentPart, ChatMessage } from './chatTypes';
 import type { CoachTone, MomentumSummary, Severity } from '../../types';
-import type { CommandPlan, CommandStep } from '../assistant/types';
-import { getCatalogPrompt, withCommandDefaults } from '../assistant/commandCatalog';
+import type {
+  CommandPlan,
+  CommandPlanResult,
+  CommandStep,
+} from '../assistant/types';
+import {
+  COMMAND_CATALOG,
+  getCatalogPrompt,
+  withCommandDefaults,
+} from '../assistant/commandCatalog';
+import { localCommandPlanner } from '../assistant/localPlanner';
 import { createAssistantId } from '../assistant/utils';
+import { runtimeDiagnosticsService } from '../runtime/runtimeDiagnosticsService';
 
 const ANTHROPIC_API_KEY = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY || '';
 const ANTHROPIC_MODEL = 'claude-haiku-4-5-20251001';
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
+const FORCE_LOCAL_COMMAND_PLANNER = /^(1|true|yes)$/i.test(
+  process.env.EXPO_PUBLIC_DAYOS_FORCE_LOCAL_PLANNER || ''
+);
 
 type AnthropicTextBlock = {
   type: 'text';
@@ -16,6 +29,18 @@ type AnthropicTextBlock = {
 
 type AnthropicResponse = {
   content: Array<AnthropicTextBlock | { type: string; text?: string }>;
+};
+
+type ParsedPlannerPayload = {
+  summary?: string;
+  coachPrompt?: string | null;
+  steps?: Array<{
+    namespace: CommandStep['namespace'];
+    command: string;
+    humanSummary?: string;
+    params?: Record<string, unknown>;
+    dependsOn?: string[];
+  }>;
 };
 
 const normalizeMessageContent = (content: ChatMessage['content']): string | ChatContentPart[] => {
@@ -37,6 +62,211 @@ const extractTextResponse = (response: AnthropicResponse): string =>
     .map((part) => part.text)
     .join('\n')
     .trim();
+
+const stripMarkdownFence = (value: string): string =>
+  value
+    .trim()
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+
+const extractFirstBalancedJsonObject = (value: string): string | null => {
+  const start = value.indexOf('{');
+  if (start < 0) {
+    return null;
+  }
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = start; index < value.length; index += 1) {
+    const char = value[index];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (char === '{') {
+      depth += 1;
+      continue;
+    }
+
+    if (char === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return value.slice(start, index + 1);
+      }
+    }
+  }
+
+  return null;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === 'object' && !Array.isArray(value);
+
+const parsePlannerPayload = (
+  response: string
+): { payload: ParsedPlannerPayload; normalizedResponse: string } => {
+  const trimmed = response.trim();
+  const fenceStripped = stripMarkdownFence(trimmed);
+  const directCandidate = fenceStripped || trimmed;
+
+  const tryParse = (candidate: string): ParsedPlannerPayload | null => {
+    if (!candidate) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(candidate) as ParsedPlannerPayload;
+    } catch {
+      return null;
+    }
+  };
+
+  const directParsed = tryParse(directCandidate);
+  if (directParsed) {
+    return {
+      payload: directParsed,
+      normalizedResponse: directCandidate,
+    };
+  }
+
+  const extracted =
+    extractFirstBalancedJsonObject(directCandidate) ||
+    extractFirstBalancedJsonObject(trimmed);
+
+  if (!extracted) {
+    throw new Error('Planner response did not contain a valid JSON object.');
+  }
+
+  const extractedParsed = tryParse(extracted);
+  if (!extractedParsed) {
+    throw new Error('Planner response contained JSON-like content that could not be parsed.');
+  }
+
+  return {
+    payload: extractedParsed,
+    normalizedResponse: extracted,
+  };
+};
+
+const validatePlannerPayload = (payload: ParsedPlannerPayload): ParsedPlannerPayload => {
+  if (!isRecord(payload)) {
+    throw new Error('Planner response must be a JSON object.');
+  }
+
+  if (
+    payload.summary !== undefined &&
+    typeof payload.summary !== 'string'
+  ) {
+    throw new Error('Planner summary must be a string.');
+  }
+
+  if (
+    payload.coachPrompt !== undefined &&
+    payload.coachPrompt !== null &&
+    typeof payload.coachPrompt !== 'string'
+  ) {
+    throw new Error('Planner coachPrompt must be a string or null.');
+  }
+
+  if (payload.steps !== undefined && !Array.isArray(payload.steps)) {
+    throw new Error('Planner steps must be an array.');
+  }
+
+  payload.steps?.forEach((step, index) => {
+    if (!isRecord(step)) {
+      throw new Error(`Planner step ${index + 1} must be an object.`);
+    }
+
+    if (typeof step.namespace !== 'string' || typeof step.command !== 'string') {
+      throw new Error(`Planner step ${index + 1} is missing namespace or command.`);
+    }
+
+    if (
+      step.humanSummary !== undefined &&
+      typeof step.humanSummary !== 'string'
+    ) {
+      throw new Error(`Planner step ${index + 1} humanSummary must be a string.`);
+    }
+
+    if (step.params !== undefined && !isRecord(step.params)) {
+      throw new Error(`Planner step ${index + 1} params must be an object.`);
+    }
+
+    if (
+      step.dependsOn !== undefined &&
+      (!Array.isArray(step.dependsOn) ||
+        step.dependsOn.some((dependency) => typeof dependency !== 'string'))
+    ) {
+      throw new Error(`Planner step ${index + 1} dependsOn must be an array of strings.`);
+    }
+  });
+
+  return payload;
+};
+
+const buildCommandCatalogSummary = (): string => {
+  const grouped = new Map<string, string[]>();
+  COMMAND_CATALOG.forEach((item) => {
+    if (!grouped.has(item.namespace)) {
+      grouped.set(item.namespace, []);
+    }
+    grouped.get(item.namespace)!.push(item.command);
+  });
+
+  return Array.from(grouped.entries())
+    .map(([namespace, commands]) => `${namespace}: ${commands.join(', ')}`)
+    .join('\n');
+};
+
+const buildCapabilityContextSnapshot = (): string => {
+  const runtimeSnapshot = runtimeDiagnosticsService.getSnapshot();
+  const missingModules =
+    runtimeSnapshot.missingModules.length > 0
+      ? runtimeSnapshot.missingModules.join(', ')
+      : 'none';
+
+  return `RUNTIME CAPABILITY SNAPSHOT:
+Current Android shell: ${runtimeDiagnosticsService.getShellLabel(runtimeSnapshot.shellType)}
+Runtime supported: ${runtimeSnapshot.isSupported ? 'yes' : 'no'}
+Missing required native modules: ${missingModules}
+Unsupported reason: ${runtimeSnapshot.unsupportedReason || 'none'}
+
+AVAILABLE COMMAND CATALOG:
+${buildCommandCatalogSummary()}
+
+Rules for capability questions:
+- If the user asks what you can do, answer from the command catalog above.
+- If Runtime supported is "no", explain that the current shell is unsupported for DayOS native features and tell the user to use the DayOS Android dev client.
+- Do not claim you have no tools when the command catalog exists.`;
+};
+
+const buildLocalCapabilityReply = (): string => {
+  const runtimeSnapshot = runtimeDiagnosticsService.getSnapshot();
+  if (!runtimeSnapshot.isSupported) {
+    return `This DayOS session is running in ${runtimeDiagnosticsService.getShellLabel(
+      runtimeSnapshot.shellType
+    )}. Native commands are blocked because ${runtimeSnapshot.unsupportedReason?.toLowerCase() || 'the runtime is unsupported'}. Use the DayOS Android dev client instead of Expo Go.`;
+  }
+
+  return 'In this Android build I can execute DayOS commands for calendar, tasks, activities, insights, contacts, communication, apps, and permission checks.';
+};
 
 const callAnthropic = async ({
   system,
@@ -221,11 +451,17 @@ Diary Themes (last 7 days): ${themes.join(', ')}
     }
   },
 
-  planCommands: async (input: string, history: ChatMessage[] = []): Promise<CommandPlan> => {
-    const localPlan = buildLocalCommandPlan(input);
-    if (!ANTHROPIC_API_KEY) {
-      return localPlan;
+  planCommands: async (input: string, history: ChatMessage[] = []): Promise<CommandPlanResult> => {
+    const localPlan = localCommandPlanner.buildPlan(input);
+    if (!ANTHROPIC_API_KEY || FORCE_LOCAL_COMMAND_PLANNER) {
+      return {
+        ok: true,
+        plan: localPlan,
+      };
     }
+
+    let rawPlannerResponse: string | null = null;
+    let normalizedPlannerResponse: string | null = null;
 
     const historyContext = history.length > 0
       ? `\nRECENT CONVERSATION:\n${history
@@ -270,39 +506,54 @@ Schema:
 }`;
 
     try {
-      const response = await callAnthropic({
+      rawPlannerResponse = await callAnthropic({
         maxTokens: 1200,
         system: systemPrompt,
         messages: [{ role: 'user', content: input }],
       });
-      const normalized = response
-        .replace(/^```json\s*/i, '')
-        .replace(/^```\s*/i, '')
-        .replace(/\s*```$/i, '')
-        .trim();
-      const parsed = JSON.parse(normalized) as {
-        summary?: string;
-        coachPrompt?: string | null;
-        steps?: Array<{
-          namespace: CommandStep['namespace'];
-          command: string;
-          humanSummary?: string;
-          params?: Record<string, unknown>;
-          dependsOn?: string[];
-        }>;
-      };
+      const {
+        payload,
+        normalizedResponse,
+      } = parsePlannerPayload(rawPlannerResponse);
+      normalizedPlannerResponse = normalizedResponse;
+      const parsed = validatePlannerPayload(payload);
 
       const runId = createAssistantId('run');
-      const normalizedSteps = normalizePlannedSteps(parsed.steps || [], runId);
+      const normalizedSteps = localCommandPlanner.normalizePlannedSteps(parsed.steps || [], runId);
+
+      if ((parsed.steps?.length || 0) !== normalizedSteps.length) {
+        throw new Error('Planner response included unsupported or invalid commands.');
+      }
+
       return {
-        runId,
-        summary: parsed.summary?.trim() || (normalizedSteps.length > 0 ? 'Working on your request.' : 'No device commands were planned.'),
-        coachPrompt: normalizedSteps.length === 0 ? parsed.coachPrompt || input : parsed.coachPrompt || null,
-        steps: normalizedSteps,
+        ok: true,
+        plan: {
+          runId,
+          summary:
+            parsed.summary?.trim() ||
+            (normalizedSteps.length > 0
+              ? 'Working on your request.'
+              : 'No device commands were planned.'),
+          coachPrompt:
+            normalizedSteps.length === 0
+              ? parsed.coachPrompt || input
+              : parsed.coachPrompt || null,
+          steps: normalizedSteps,
+        },
       };
     } catch (error) {
       console.error('[AI Planner] Failed to build command plan', error);
-      return localPlan;
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        ok: false,
+        kind:
+          rawPlannerResponse === null
+            ? 'planner_transport_error'
+            : 'planner_parse_error',
+        rawResponse: rawPlannerResponse,
+        normalizedResponse: normalizedPlannerResponse,
+        errorMessage: message,
+      };
     }
   },
 
@@ -319,7 +570,7 @@ Schema:
     try {
       return await callAnthropic({
         maxTokens: 1000,
-        system: `${COACH_SYSTEM}\n\n${snap}`,
+        system: `${COACH_SYSTEM}\n\n${buildCapabilityContextSnapshot()}\n\n${snap}`,
         messages: contextHistory,
       });
     } catch (e) {
@@ -553,6 +804,10 @@ Return strict JSON only with this exact shape:
 
     if (isTimePrompt(lower)) {
       return getCurrentTimeSummary();
+    }
+
+    if (isCapabilityPrompt(lower)) {
+      return buildLocalCapabilityReply();
     }
 
     return 'I am running in local mode right now. I can still help with your schedule, drift, reminders, blocking apps, and activity check-ins.';
@@ -802,6 +1057,21 @@ const isTimePrompt = (lower: string): boolean =>
   lower.includes('what date') ||
   lower === 'time' ||
   lower === 'date';
+
+const isCapabilityPrompt = (lower: string): boolean =>
+  lower.includes('what can you do') ||
+  lower.includes('what do you do') ||
+  lower.includes('do you have access') ||
+  lower.includes('what tools') ||
+  lower.includes('what commands') ||
+  lower.includes('can you access') ||
+  lower.includes('can you control') ||
+  lower.includes('can you block') ||
+  lower.includes('can you open') ||
+  lower.includes('can you launch') ||
+  lower.includes('can you create') ||
+  lower.includes('can you update') ||
+  lower.includes('can you delete');
 
 const deriveSeverity = (area: string): Severity => {
   const lower = area.toLowerCase();

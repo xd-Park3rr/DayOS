@@ -28,6 +28,22 @@ const mapEventToCache = (event: Calendar.Event): CalendarEventCacheItem => ({
   lastSyncedAt: new Date().toISOString(),
 });
 
+const normalizeAlarmOffsets = (
+  offsets?: number[] | null
+): Calendar.Alarm[] | undefined => {
+  const normalized = (offsets || [])
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+    .map((value) => Math.max(0, Math.round(value)));
+
+  if (normalized.length === 0) {
+    return undefined;
+  }
+
+  return normalized.map((minutesBefore) => ({
+    relativeOffset: -minutesBefore,
+  }));
+};
+
 const normalizeCalendars = async (): Promise<Calendar.Calendar[]> => {
   const calendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
   return calendars.filter((calendar) => calendar.isVisible !== false);
@@ -210,6 +226,7 @@ export const calendarService = {
     notes?: string | null;
     location?: string | null;
     allDay?: boolean;
+    alarmMinutesBefore?: number[] | null;
   }): Promise<CalendarEventCacheItem> => {
     const defaultCalendar = params.calendarId
       ? { id: params.calendarId }
@@ -226,6 +243,7 @@ export const calendarService = {
       notes: params.notes || undefined,
       location: params.location || undefined,
       allDay: !!params.allDay,
+      alarms: normalizeAlarmOffsets(params.alarmMinutesBefore),
     });
 
     const created = await calendarService.getEventById(eventId);
@@ -245,6 +263,7 @@ export const calendarService = {
       notes?: string | null;
       location?: string | null;
       allDay?: boolean;
+      alarmMinutesBefore?: number[] | null;
     };
   }): Promise<CalendarEventCacheItem> => {
     await Calendar.updateEventAsync(params.eventId, {
@@ -254,6 +273,10 @@ export const calendarService = {
       notes: params.patch.notes ?? undefined,
       location: params.patch.location ?? undefined,
       allDay: params.patch.allDay,
+      alarms:
+        params.patch.alarmMinutesBefore === undefined
+          ? undefined
+          : normalizeAlarmOffsets(params.patch.alarmMinutesBefore),
     });
 
     const updated = await calendarService.getEventById(params.eventId);

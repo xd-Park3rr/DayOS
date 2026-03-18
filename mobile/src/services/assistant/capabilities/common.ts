@@ -6,6 +6,20 @@ export const getStringParam = (
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 };
 
+export const getFirstStringParam = (
+  params: Record<string, unknown>,
+  keys: string[]
+): string | undefined => {
+  for (const key of keys) {
+    const value = getStringParam(params, key);
+    if (value) {
+      return value;
+    }
+  }
+
+  return undefined;
+};
+
 export const getNumberParam = (
   params: Record<string, unknown>,
   key: string
@@ -41,7 +55,12 @@ export const parseDateLike = (value: unknown): Date | null => {
     return null;
   }
 
-  const lower = value.trim().toLowerCase();
+  const normalized = value
+    .trim()
+    .replace(/\b(\d{1,2})(st|nd|rd|th)\b/gi, '$1')
+    .replace(/\s+at\s+/gi, ' ')
+    .replace(/\s+/g, ' ');
+  const lower = normalized.toLowerCase();
   const now = new Date();
 
   if (lower === 'today') {
@@ -54,12 +73,12 @@ export const parseDateLike = (value: unknown): Date | null => {
     return next;
   }
 
-  const direct = new Date(value);
+  const direct = new Date(normalized);
   if (!Number.isNaN(direct.getTime())) {
     return direct;
   }
 
-  const match = value.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+  const match = normalized.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
   if (!match) {
     return null;
   }
@@ -79,6 +98,25 @@ export const parseDateLike = (value: unknown): Date | null => {
   const date = new Date(now);
   date.setHours(hour, minute, 0, 0);
   return date;
+};
+
+export const combineDateAndTime = (
+  dateValue: unknown,
+  timeValue: unknown
+): Date | null => {
+  const date = parseDateLike(dateValue);
+  const time = parseDateLike(timeValue);
+
+  if (!date || !time) {
+    if (typeof dateValue === 'string' && typeof timeValue === 'string') {
+      return parseDateLike(`${dateValue} ${timeValue}`);
+    }
+    return null;
+  }
+
+  const combined = new Date(date);
+  combined.setHours(time.getHours(), time.getMinutes(), 0, 0);
+  return combined;
 };
 
 export const getRangeFromParams = (

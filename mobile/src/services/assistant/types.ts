@@ -2,6 +2,7 @@ import type { ChatMessage, ChatSource } from '../ai/chatTypes';
 import type {
   AssistantAutonomyMode,
   AssistantStepStatus,
+  RuntimeCapabilitySnapshot,
 } from '../../types';
 
 export type AssistantNamespace =
@@ -43,6 +44,27 @@ export interface CommandPlan {
   steps: CommandStep[];
   coachPrompt?: string | null;
 }
+
+export type CommandPlanFailureKind =
+  | 'planner_parse_error'
+  | 'planner_transport_error';
+
+export type CommandPlanSuccess = {
+  ok: true;
+  plan: CommandPlan;
+};
+
+export type CommandPlanFailure = {
+  ok: false;
+  kind: CommandPlanFailureKind;
+  rawResponse: string | null;
+  normalizedResponse: string | null;
+  errorMessage: string;
+};
+
+export type CommandPlanResult =
+  | CommandPlanSuccess
+  | CommandPlanFailure;
 
 export interface StepResult {
   stepId: string;
@@ -98,4 +120,12 @@ export interface PlanExecutionResult {
   reply: string;
   stepResults: StepResult[];
   pendingConfirmation: boolean;
+}
+
+export interface AssistantRunDiagnostics {
+  plannerErrorKind?: string | null;
+  plannerErrorMessage?: string | null;
+  plannerRawResponse?: string | null;
+  plannerNormalizedResponse?: string | null;
+  runtimeSnapshot?: RuntimeCapabilitySnapshot | null;
 }

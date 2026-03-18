@@ -1,4 +1,4 @@
-import { NativeModules, Platform } from 'react-native';
+import { Platform } from 'react-native';
 import { bus } from '../../events/bus';
 import { microphonePermission } from './microphonePermission';
 
@@ -37,11 +37,6 @@ let isListening = false;
 let detectionLocked = false;
 
 const loadWakeWordModule = async (): Promise<WakeWordModule | null> => {
-  if (!NativeModules.PvPorcupine || !NativeModules.PvVoiceProcessor) {
-    console.warn('[WakeWord] Picovoice native modules are not ready yet.');
-    return null;
-  }
-
   try {
     const packageModule = require('@picovoice/porcupine-react-native') as Record<string, unknown>;
     const moduleValue = (packageModule.default as WakeWordModule | undefined) || (packageModule as unknown as WakeWordModule);
@@ -56,7 +51,7 @@ const loadWakeWordModule = async (): Promise<WakeWordModule | null> => {
         return moduleValue;
       }
     } catch (commonJsError) {
-      console.warn('[WakeWord] Picovoice native module is unavailable in this runtime.', commonJsError ?? packageError);
+      console.warn('[WakeWord] Failed to load Picovoice JS entrypoint.', commonJsError ?? packageError);
     }
   }
 

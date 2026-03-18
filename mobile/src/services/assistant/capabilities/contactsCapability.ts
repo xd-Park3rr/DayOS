@@ -1,6 +1,26 @@
 import { contactsService } from '../../contacts/contactsService';
 import type { AssistantCapability } from '../types';
-import { getStringParam } from './common';
+import { getFirstStringParam, getStringParam } from './common';
+
+const resolveSearchQuery = (params: Record<string, unknown>): string | undefined => {
+  const explicit = getFirstStringParam(params, [
+    'query',
+    'contactQuery',
+    'name',
+    'person',
+  ]);
+  if (explicit) {
+    return explicit;
+  }
+
+  const rawText = getStringParam(params, 'rawText');
+  if (!rawText) {
+    return undefined;
+  }
+
+  const match = rawText.match(/\b(?:search|find|look up|lookup)\s+for?\s*([a-z][a-z\s'-]+?)(?:\s+in\s+contacts?)?$/i);
+  return match?.[1]?.trim();
+};
 
 export const contactsCapability: AssistantCapability = {
   namespace: 'contacts',
@@ -17,7 +37,7 @@ export const contactsCapability: AssistantCapability = {
 
     switch (step.command) {
       case 'search': {
-        const query = getStringParam(step.params, 'query');
+        const query = resolveSearchQuery(step.params);
         if (!query) {
           return {
             reply: 'Contacts search needs a query.',

@@ -1,0 +1,24 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "Node16",
+    "target": "es2020",
+    "lib": ["es2020"],
+    "moduleResolution": "Node16",
+    "outDir": "./dist-cli",
+    "rootDir": "./",
+    "types": ["node"],
+    "noEmit": false
+  },
+  "include": [
+    "scripts/assistant-harness.ts",
+    "src/services/assistant/assistantEngine.ts",
+    "src/services/assistant/commandCatalog.ts",
+    "src/services/assistant/localPlanner.ts",
+    "src/services/assistant/testing/**/*.ts",
+    "src/services/assistant/types.ts",
+    "src/services/assistant/utils.ts",
+    "src/services/ai/chatTypes.ts",
+    "src/types/index.ts"
+  ]
+}

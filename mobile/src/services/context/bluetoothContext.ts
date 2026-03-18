@@ -9,12 +9,6 @@ const loadBluetoothModule = async (): Promise<any | null> => {
       return null;
     }
 
-    const nativeModule = (moduleValue as { _nativeModule?: unknown })._nativeModule;
-    if (!nativeModule) {
-      console.warn('[BT Context] Bluetooth native module is not installed in the current build.');
-      return null;
-    }
-
     return moduleValue;
   } catch (e) {
     console.warn('[BT Context] Bluetooth native module is unavailable in this runtime.', e);

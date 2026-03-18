@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, ActivityIndicator, View } from 'react-native';
 import { runMigrations } from './src/db/client';
 import { profileRepo } from './src/db/repositories';
@@ -25,6 +25,9 @@ import { jarvisService } from './src/services/ai/jarvisService';
 import { MomentumDetailScreen } from './src/features/momentum/MomentumDetailScreen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { taskNotificationService } from './src/services/task/taskNotificationService';
+import { runtimeDiagnosticsService } from './src/services/runtime/runtimeDiagnosticsService';
+import { UnsupportedRuntimeScreen } from './src/features/runtime/UnsupportedRuntimeScreen';
+import type { RuntimeCapabilitySnapshot } from './src/types';
 
 import { 
   useFonts, 
@@ -42,6 +45,9 @@ const Stack = createNativeStackNavigator();
 export default function App() {
   const { isBooted, onboardingComplete, setBooted, setOnboardingComplete } = useAppStore();
   const hydrateChat = useChatStore((state) => state.hydrate);
+  const [runtimeSnapshot, setRuntimeSnapshot] = useState<RuntimeCapabilitySnapshot>(
+    () => runtimeDiagnosticsService.getSnapshot()
+  );
   const [fontsLoaded] = useFonts({
     DMSans: DMSans_400Regular,
     DMSans_Medium: DMSans_500Medium,
@@ -55,6 +61,13 @@ export default function App() {
       try {
         runMigrations();
         hydrateChat();
+        const snapshot = runtimeDiagnosticsService.getSnapshot();
+        setRuntimeSnapshot(snapshot);
+        if (!snapshot.isSupported) {
+          runtimeDiagnosticsService.logUnsupportedRuntime(snapshot);
+          return;
+        }
+
         consequenceEngine.start();
         screentimeService.startMonitoring();
         await taskNotificationService.initialize();
@@ -84,6 +97,14 @@ export default function App() {
       <View style={styles.container}>
         <ActivityIndicator color={COLORS.accent} />
       </View>
+    );
+  }
+
+  if (!runtimeSnapshot.isSupported) {
+    return (
+      <SafeAreaProvider>
+        <UnsupportedRuntimeScreen snapshot={runtimeSnapshot} />
+      </SafeAreaProvider>
     );
   }
 

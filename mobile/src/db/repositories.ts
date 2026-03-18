@@ -23,6 +23,7 @@ import type {
   TaskNotification,
   TaskStatus,
   UserProfile,
+  RuntimeCapabilitySnapshot,
 } from '../types';
 import type { ChatMessage, ChatSource } from '../services/ai/chatTypes';
 
@@ -174,6 +175,12 @@ const mapAssistantRun = (row: any): AssistantRunRecord => ({
   summary: row.summary,
   autonomyMode: row.autonomy_mode as AssistantAutonomyMode,
   status: row.status as AssistantRunStatus,
+  plannerErrorKind: row.planner_error_kind || null,
+  plannerErrorMessage: row.planner_error_message || null,
+  plannerRawResponse: row.planner_raw_response || null,
+  plannerNormalizedResponse: row.planner_normalized_response || null,
+  runtimeSnapshot:
+    (parseJsonValue(row.runtime_snapshot) as RuntimeCapabilitySnapshot | null) || null,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -695,8 +702,9 @@ export const assistantRunRepo = {
   create: (run: AssistantRunRecord): AssistantRunRecord => {
     const db = getDb();
     db.runSync(
-      `INSERT INTO assistant_run (id, source, raw_text, summary, autonomy_mode, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO assistant_run
+       (id, source, raw_text, summary, autonomy_mode, status, planner_error_kind, planner_error_message, planner_raw_response, planner_normalized_response, runtime_snapshot, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         run.id,
         run.source,
@@ -704,6 +712,11 @@ export const assistantRunRepo = {
         run.summary,
         run.autonomyMode,
         run.status,
+        run.plannerErrorKind || null,
+        run.plannerErrorMessage || null,
+        run.plannerRawResponse || null,
+        run.plannerNormalizedResponse || null,
+        run.runtimeSnapshot ? stringifyJson(run.runtimeSnapshot) : null,
         run.createdAt,
         run.updatedAt,
       ]

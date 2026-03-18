@@ -29,6 +29,37 @@ export type JarvisSessionState =
   | 'thinking'
   | 'acting'
   | 'speaking';
+export type RuntimeShellType =
+  | 'expo_go'
+  | 'dev_client'
+  | 'standalone'
+  | 'unknown';
+export type RuntimeModuleKey =
+  | 'rnWhisper'
+  | 'picovoicePorcupine'
+  | 'picovoiceVoiceProcessor'
+  | 'bluetoothClassic'
+  | 'dayosAppControl';
+
+export interface RuntimeModuleStatus {
+  key: RuntimeModuleKey;
+  label: string;
+  available: boolean;
+  required: boolean;
+  detail: string;
+}
+
+export interface RuntimeCapabilitySnapshot {
+  shellType: RuntimeShellType;
+  executionEnvironment: string | null;
+  appOwnership: string | null;
+  isSupported: boolean;
+  unsupportedReason: string | null;
+  missingModules: RuntimeModuleKey[];
+  moduleStatus: RuntimeModuleStatus[];
+  debugFingerprint: string;
+  detectedAt: string;
+}
 
 export interface UserProfile {
   id: string;
@@ -227,6 +258,11 @@ export interface AssistantRunRecord {
   summary: string;
   autonomyMode: AssistantAutonomyMode;
   status: AssistantRunStatus;
+  plannerErrorKind?: string | null;
+  plannerErrorMessage?: string | null;
+  plannerRawResponse?: string | null;
+  plannerNormalizedResponse?: string | null;
+  runtimeSnapshot?: RuntimeCapabilitySnapshot | null;
   createdAt: string;
   updatedAt: string;
 }

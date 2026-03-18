@@ -254,6 +254,7 @@ export const jarvisService = {
       return;
     }
 
+    console.log('[Jarvis] Manual activation requested.');
     bus.emit('wakeword.detected', { timestamp: Date.now() });
   },
 

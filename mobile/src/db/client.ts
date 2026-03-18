@@ -251,4 +251,18 @@ export const runMigrations = () => {
     database.execSync(v3Migration);
     database.runSync('INSERT INTO migrations (name) VALUES (?)', ['v3AssistantCommandEngine']);
   }
+
+  const v4Migration = `
+    ALTER TABLE assistant_run ADD COLUMN planner_error_kind TEXT;
+    ALTER TABLE assistant_run ADD COLUMN planner_error_message TEXT;
+    ALTER TABLE assistant_run ADD COLUMN planner_raw_response TEXT;
+    ALTER TABLE assistant_run ADD COLUMN planner_normalized_response TEXT;
+    ALTER TABLE assistant_run ADD COLUMN runtime_snapshot TEXT;
+  `;
+
+  const hasV4 = database.getFirstSync<{id: number}>('SELECT id FROM migrations WHERE name = ?', ['v4AssistantRunDiagnostics']);
+  if (!hasV4) {
+    database.execSync(v4Migration);
+    database.runSync('INSERT INTO migrations (name) VALUES (?)', ['v4AssistantRunDiagnostics']);
+  }
 };

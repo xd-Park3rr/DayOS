@@ -1,0 +1,3 @@
+display_name: Mobile Tests
+description: Write focused DayOS app tests or practical validation helpers.
+allow_implicit_invocation: true

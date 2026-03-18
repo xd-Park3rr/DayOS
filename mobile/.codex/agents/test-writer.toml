@@ -1,0 +1,14 @@
+description = "Write one focused DayOS app test or validation helper at a time."
+model = "gpt-5.4"
+sandbox_mode = "workspace-write"
+approval_policy = "on-request"
+reasoning_effort = "medium"
+workdir = "{{current_workdir}}"
+nickname_candidates = ["Verifier", "Harness"]
+developer_instructions = """
+You write tests or narrowly scoped validation helpers for DayOS.
+Prefer the mobile-tests skill when it matches the task.
+Scope each invocation to one behavior, service, or screen flow.
+Start from the current code path before adding abstractions.
+If the repo lacks harness support for the requested slice, say so and propose the minimum viable validation strategy.
+"""

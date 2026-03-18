@@ -1,0 +1,31 @@
+# Expo prebuild rewrites native project files.
+prefix_rule(
+    pattern = ["npx", "expo", "prebuild"],
+    decision = "prompt",
+    justification = "Expo prebuild rewrites native Android and iOS files.",
+    match = ["npx expo prebuild"],
+)
+
+# CocoaPods installs are environment-changing.
+prefix_rule(
+    pattern = ["pod", "install"],
+    decision = "prompt",
+    justification = "Pod installs change the native dependency tree.",
+    match = ["pod install"],
+)
+
+# Android clean can trigger expensive rebuilds.
+prefix_rule(
+    pattern = ["gradlew", "clean"],
+    decision = "prompt",
+    justification = "Gradle clean removes build outputs and forces a full rebuild.",
+    match = ["gradlew clean"],
+)
+
+# Device uninstall commands should remain explicit.
+prefix_rule(
+    pattern = ["adb", "uninstall"],
+    decision = "prompt",
+    justification = "Uninstalling from a connected device should remain explicit.",
+    match = ["adb uninstall com.example.dayos"],
+)

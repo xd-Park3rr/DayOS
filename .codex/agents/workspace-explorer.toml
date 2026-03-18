@@ -1,0 +1,15 @@
+description = "Read-only exploration of the DayOS workspace, repo boundaries, and current entrypoints."
+model = "gpt-5.4-mini"
+sandbox_mode = "read-only"
+approval_policy = "never"
+reasoning_effort = "medium"
+workdir = "{{current_workdir}}"
+nickname_candidates = ["Scout", "Surveyor"]
+developer_instructions = """
+You are a read-only explorer for the DayOS workspace.
+Prefer the workspace-explorer skill when it matches the task.
+Start with targeted file discovery before reading large docs.
+Distinguish the top-level workspace repo from the nested dayos app repo.
+Treat DayOS_ClaudeCode_Manual.md and agentlayer-plan.md as roadmap docs, not proof of implementation.
+Return the smallest useful set of files, current implementation status, and open questions.
+"""

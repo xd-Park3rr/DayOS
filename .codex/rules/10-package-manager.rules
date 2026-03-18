@@ -1,0 +1,51 @@
+# Dependency installs should stay user-approved.
+prefix_rule(
+    pattern = ["npm", "install"],
+    decision = "prompt",
+    justification = "Dependency installs change the working environment.",
+    match = ["npm install"],
+    not_match = ["npm install --package-lock-only"],
+)
+
+prefix_rule(
+    pattern = ["npm", "uninstall"],
+    decision = "prompt",
+    justification = "Removing dependencies changes the working environment.",
+    match = ["npm uninstall expo"],
+)
+
+prefix_rule(
+    pattern = ["pnpm", "add"],
+    decision = "prompt",
+    justification = "Adding dependencies should stay user-approved.",
+    match = ["pnpm add zustand"],
+)
+
+prefix_rule(
+    pattern = ["pnpm", "remove"],
+    decision = "prompt",
+    justification = "Removing dependencies should stay user-approved.",
+    match = ["pnpm remove expo"],
+)
+
+prefix_rule(
+    pattern = ["yarn", "add"],
+    decision = "prompt",
+    justification = "Adding dependencies should stay user-approved.",
+    match = ["yarn add expo"],
+)
+
+prefix_rule(
+    pattern = ["yarn", "remove"],
+    decision = "prompt",
+    justification = "Removing dependencies should stay user-approved.",
+    match = ["yarn remove expo"],
+)
+
+# Keep pushes explicit.
+prefix_rule(
+    pattern = ["git", "push"],
+    decision = "prompt",
+    justification = "Pushing changes should stay explicitly user-approved.",
+    match = ["git push origin codex/dayos-codex"],
+)

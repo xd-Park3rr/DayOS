@@ -1,0 +1,47 @@
+# Block destructive Git history rewrites.
+prefix_rule(
+    pattern = ["git", "reset", "--hard"],
+    decision = "forbidden",
+    justification = "Use targeted edits and inspection instead of wiping local state.",
+    match = ["git reset --hard HEAD"],
+)
+
+# Block blanket checkout discards.
+prefix_rule(
+    pattern = ["git", "checkout", "--"],
+    decision = "forbidden",
+    justification = "Use targeted edits instead of discarding local changes.",
+    match = ["git checkout -- src/file.ts"],
+)
+
+# Block recursive force deletion in POSIX shells.
+prefix_rule(
+    pattern = ["rm", "-rf"],
+    decision = "forbidden",
+    justification = "Avoid recursive force deletion; remove only reviewed paths.",
+    match = ["rm -rf node_modules"],
+)
+
+# Keep broad PowerShell deletes user-approved.
+prefix_rule(
+    pattern = ["Remove-Item", "-Recurse", "-Force"],
+    decision = "prompt",
+    justification = "Recursive force deletes should be reviewed before they run.",
+    match = ["Remove-Item -Recurse -Force .\\tmp"],
+)
+
+# Block directory cleaning that can wipe untracked work.
+prefix_rule(
+    pattern = ["git", "clean", "-fd"],
+    decision = "forbidden",
+    justification = "Cleaning untracked files can remove user work.",
+    match = ["git clean -fd"],
+)
+
+# Keep commit rewrites explicit.
+prefix_rule(
+    pattern = ["git", "commit", "--amend"],
+    decision = "prompt",
+    justification = "Amending commits rewrites history and should stay explicit.",
+    match = ["git commit --amend --no-edit"],
+)

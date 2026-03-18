@@ -1,0 +1,19 @@
+diff --git a/node_modules/@fugood/react-native-audio-pcm-stream/android/src/main/java/com/imxiqi/rnliveaudiostream/RNLiveAudioStreamModule.java b/node_modules/@fugood/react-native-audio-pcm-stream/android/src/main/java/com/imxiqi/rnliveaudiostream/RNLiveAudioStreamModule.java
+index 6d7d17d..6fa246b 100644
+--- a/node_modules/@fugood/react-native-audio-pcm-stream/android/src/main/java/com/imxiqi/rnliveaudiostream/RNLiveAudioStreamModule.java
++++ b/node_modules/@fugood/react-native-audio-pcm-stream/android/src/main/java/com/imxiqi/rnliveaudiostream/RNLiveAudioStreamModule.java
+@@ -125,4 +125,14 @@ public class RNLiveAudioStreamModule extends ReactContextBaseJavaModule {
+     public void stop() {
+         isRecording = false;
+     }
++
++    @ReactMethod
++    public void addListener(String eventName) {
++        // Required for React Native NativeEventEmitter compatibility.
++    }
++
++    @ReactMethod
++    public void removeListeners(double count) {
++        // Required for React Native NativeEventEmitter compatibility.
++    }
+ }

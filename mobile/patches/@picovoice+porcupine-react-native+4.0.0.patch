@@ -1,0 +1,64 @@
+diff --git a/node_modules/@picovoice/porcupine-react-native/src/porcupine.tsx b/node_modules/@picovoice/porcupine-react-native/src/porcupine.tsx
+index dc3dc7b..c87be5d 100644
+--- a/node_modules/@picovoice/porcupine-react-native/src/porcupine.tsx
++++ b/node_modules/@picovoice/porcupine-react-native/src/porcupine.tsx
+@@ -13,7 +13,13 @@ import { NativeModules } from 'react-native';
+ import * as PorcupineErrors from './porcupine_errors';
+ import type BuiltInKeywords from './builtin_keywords';
+ 
+-const RCTPorcupine = NativeModules.PvPorcupine;
++const getRCTPorcupine = () => {
++  const module = NativeModules.PvPorcupine;
++  if (!module) {
++    throw new Error('PvPorcupine native module is unavailable');
++  }
++  return module;
++};
+ 
+ type NativeError = {
+   code: string;
+@@ -34,7 +40,7 @@ class Porcupine {
+    */
+   public static async getAvailableDevices() {
+     try {
+-      return await RCTPorcupine.getAvailableDevices();
++      return await getRCTPorcupine().getAvailableDevices();
+     } catch (err) {
+       if (err instanceof PorcupineErrors.PorcupineError) {
+         throw err;
+@@ -71,7 +77,7 @@ class Porcupine {
+   ) {
+     try {
+       let { handle, frameLength, sampleRate, version } =
+-        await RCTPorcupine.fromBuiltInKeywords(
++        await getRCTPorcupine().fromBuiltInKeywords(
+           accessKey,
+           modelPath,
+           device,
+@@ -114,7 +120,7 @@ class Porcupine {
+   ) {
+     try {
+       let { handle, frameLength, sampleRate, version } =
+-        await RCTPorcupine.fromKeywordPaths(
++        await getRCTPorcupine().fromKeywordPaths(
+           accessKey,
+           modelPath,
+           device,
+@@ -170,7 +176,7 @@ class Porcupine {
+     }
+ 
+     try {
+-      return await RCTPorcupine.process(this._handle, frame);
++      return await getRCTPorcupine().process(this._handle, frame);
+     } catch (err) {
+       const nativeError = err as NativeError;
+       throw Porcupine.codeToError(nativeError.code, nativeError.message);
+@@ -181,7 +187,7 @@ class Porcupine {
+    * Frees memory that was allocated for Porcupine
+    */
+   async delete() {
+-    return RCTPorcupine.delete(this._handle);
++    return getRCTPorcupine().delete(this._handle);
+   }
+ 
+   /**

@@ -1,0 +1,3 @@
+display_name: Release Check
+description: Run DayOS workspace or app release-readiness and validation checks.
+allow_implicit_invocation: true

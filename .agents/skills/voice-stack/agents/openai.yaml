@@ -1,0 +1,3 @@
+display_name: Voice Stack
+description: Work on DayOS voice services, native audio modules, and intent routing constraints.
+allow_implicit_invocation: true

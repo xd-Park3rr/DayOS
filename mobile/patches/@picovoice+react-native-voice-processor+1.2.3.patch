@@ -1,0 +1,79 @@
+diff --git a/node_modules/@picovoice/react-native-voice-processor/src/voice_processor.tsx b/node_modules/@picovoice/react-native-voice-processor/src/voice_processor.tsx
+index 9db4e85..599d7be 100644
+--- a/node_modules/@picovoice/react-native-voice-processor/src/voice_processor.tsx
++++ b/node_modules/@picovoice/react-native-voice-processor/src/voice_processor.tsx
+@@ -10,6 +10,14 @@
+ import { NativeEventEmitter, NativeModules } from 'react-native';
+ import { VoiceProcessorError } from './voice_processor_errors';
+ 
++const getVoiceProcessorModule = () => {
++  const module = NativeModules.PvVoiceProcessor;
++  if (!module) {
++    throw new Error('PvVoiceProcessor native module is unavailable');
++  }
++  return module;
++};
++
+ /**
+  * Type for callback functions that receive audio frames from the VoiceProcessor.
+  */
+@@ -31,14 +39,15 @@ class VoiceProcessor {
+    * Private constructor.
+    */
+   private constructor() {
+-    this._eventEmitter = new NativeEventEmitter(NativeModules.PvVoiceProcessor);
++    const voiceProcessorModule = getVoiceProcessorModule();
++    this._eventEmitter = new NativeEventEmitter(voiceProcessorModule);
+     this._eventEmitter.addListener(
+-      NativeModules.PvVoiceProcessor.FRAME_EMITTER_KEY,
++      voiceProcessorModule.FRAME_EMITTER_KEY,
+       async (frame: number[]) => {
+         this._frameListeners.forEach(
+           (listener: VoiceProcessorFrameListener) => {
+             listener(frame);
+           }
+         );
+       }
+     );
+ 
+     this._eventEmitter.addListener(
+-      NativeModules.PvVoiceProcessor.ERROR_EMITTER_KEY,
++      voiceProcessorModule.ERROR_EMITTER_KEY,
+       async (error: string) => {
+         let voiceProcessorError = new VoiceProcessorError(error);
+         this._errorListeners.forEach(
+@@ -142,7 +151,7 @@ class VoiceProcessor {
+    * @returns A promise that resolves when recording starts.
+    */
+   public async start(frameLength: number, sampleRate: number): Promise<void> {
+-    return NativeModules.PvVoiceProcessor.start(frameLength, sampleRate);
++    return getVoiceProcessorModule().start(frameLength, sampleRate);
+   }
+ 
+   /**
+@@ -150,7 +159,7 @@ class VoiceProcessor {
+    * @returns A promise that resolves when recording stops.
+    */
+   public async stop(): Promise<void> {
+-    return NativeModules.PvVoiceProcessor.stop();
++    return getVoiceProcessorModule().stop();
+   }
+ 
+   /**
+@@ -158,7 +167,7 @@ class VoiceProcessor {
+    * @returns A promise that resolves with a boolean indicating recording status.
+    */
+   public async isRecording(): Promise<boolean> {
+-    return NativeModules.PvVoiceProcessor.isRecording();
++    return getVoiceProcessorModule().isRecording();
+   }
+ 
+   /**
+@@ -166,7 +175,7 @@ class VoiceProcessor {
+    * @returns A promise that resolves with a boolean indicating permission status.
+    */
+   public async hasRecordAudioPermission(): Promise<boolean> {
+-    return NativeModules.PvVoiceProcessor.hasRecordAudioPermission();
++    return getVoiceProcessorModule().hasRecordAudioPermission();
+   }
+ }

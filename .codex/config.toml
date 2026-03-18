@@ -1,0 +1,61 @@
+model = "gpt-5.4"
+model_reasoning_effort = "medium"
+model_reasoning_summary = "none"
+model_verbosity = "low"
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+web_search = "cached"
+review_model = "gpt-5.4"
+hide_agent_reasoning = true
+tool_output_token_limit = 10000
+project_doc_max_bytes = 32768
+project_doc_fallback_filenames = ["CLAUDE.md"]
+notify = ["python", "scripts/notify.py"]
+
+[agents]
+max_threads = 3
+max_depth = 1
+task_tool_timeout_ms = 30000
+job_max_runtime_seconds = 1200
+
+[history]
+max_bytes = 52428800
+
+[tui]
+notifications = ["approval-requested"]
+
+[mcp_servers.openaiDeveloperDocs]
+url = "https://developers.openai.com/mcp"
+
+[profiles.deep-review]
+model = "gpt-5.4"
+model_reasoning_effort = "high"
+plan_mode_reasoning_effort = "high"
+model_reasoning_summary = "concise"
+model_verbosity = "medium"
+sandbox_mode = "read-only"
+web_search = "cached"
+
+[profiles.docs]
+model = "gpt-5.4-mini"
+model_reasoning_effort = "medium"
+model_reasoning_summary = "concise"
+model_verbosity = "low"
+sandbox_mode = "read-only"
+web_search = "cached"
+
+[profiles.release-check]
+model = "gpt-5.4-mini"
+model_reasoning_effort = "medium"
+model_reasoning_summary = "none"
+model_verbosity = "low"
+sandbox_mode = "read-only"
+web_search = "cached"
+
+[profiles.codex-maintenance]
+model = "gpt-5.4"
+model_reasoning_effort = "medium"
+model_reasoning_summary = "none"
+model_verbosity = "low"
+sandbox_mode = "workspace-write"
+web_search = "cached"

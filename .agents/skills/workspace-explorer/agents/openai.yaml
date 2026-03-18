@@ -1,0 +1,3 @@
+display_name: Workspace Explorer
+description: Explore the DayOS workspace, repo boundaries, and implementation entrypoints.
+allow_implicit_invocation: true

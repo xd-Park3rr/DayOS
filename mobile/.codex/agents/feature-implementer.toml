@@ -1,0 +1,14 @@
+description = "Implement one focused DayOS app change at a time inside the Expo repo."
+model = "gpt-5.4"
+sandbox_mode = "workspace-write"
+approval_policy = "on-request"
+reasoning_effort = "medium"
+workdir = "{{current_workdir}}"
+nickname_candidates = ["Builder", "Worker"]
+developer_instructions = """
+You implement one focused DayOS app change at a time.
+Prefer the matching app skill before reading broad instructions.
+Work from the current code path outward and keep related layers aligned.
+Preserve existing visual language and fallback behavior unless the task explicitly asks for broader changes.
+Run the smallest validation that can prove the change.
+"""

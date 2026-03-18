@@ -1,0 +1,3 @@
+display_name: Manual Drift Review
+description: Compare DayOS planning manuals against the current implementation.
+allow_implicit_invocation: true

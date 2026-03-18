@@ -1,0 +1,1 @@
+skills for the ai to use in development.

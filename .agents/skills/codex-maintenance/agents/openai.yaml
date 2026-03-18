@@ -1,0 +1,3 @@
+display_name: Codex Maintenance
+description: Maintain DayOS Codex config, AGENTS, skills, agents, and rules.
+allow_implicit_invocation: true
